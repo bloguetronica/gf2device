@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.1.0
+/* GF2 device class - Version 0.2.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -97,6 +97,54 @@ int GF2Device::open(const std::string &serial)
 void GF2Device::reset(int &errcnt, std::string &errstr)
 {
     cp2130_.reset(errcnt, errstr);
+}
+
+// Sets the waveform of the generated signal to sinusoidal
+void GF2Device::setSineWave(int &errcnt, std::string &errstr)
+{
+    cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    std::vector<uint8_t> setSineWave = {
+        0x22, 0x00  // Sinusoidal waveform, B28 = 1, PIN/SW = 1
+    };
+    cp2130_.spiWrite(setSineWave, EPOUT, errcnt, errstr);  // Set the waveform to sinusoidal (AD9834 on channel 0)
+    usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
+    cp2130_.disableCS(0, errcnt, errstr);  // Disable the previously enabled chip select
+}
+
+// Sets the waveform of the generated signal to triangular
+void GF2Device::setTriangleWave(int &errcnt, std::string &errstr)
+{
+    cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    std::vector<uint8_t> setTriangleWave = {
+        0x22, 0x02  // Triangular waveform, B28 = 1, PIN/SW = 1
+    };
+    cp2130_.spiWrite(setTriangleWave, EPOUT, errcnt, errstr);  // Set the waveform to triangular (AD9834 on channel 0)
+    usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
+    cp2130_.disableCS(0, errcnt, errstr);  // Disable the previously enabled chip select
+}
+
+// Sets up channel 0 for communication with the AD9834 waveform generator
+void GF2Device::setupChannel0(int &errcnt, std::string &errstr)
+{
+    CP2130::SPIMode mode;
+    mode.csmode = CP2130::CSMODEPP;  // Chip select pin mode regarding channel 0 is push-pull
+    mode.cfrq = CP2130::CFRQ12M;  // SPI clock frequency set to 12MHz
+    mode.cpol = CP2130::CPOL1;  // SPI clock polarity is active low (CPOL = 1)
+    mode.cpha = CP2130::CPHA0;  // SPI data is valid on each falling edge (CPHA = 0)
+    cp2130_.configureSPIMode(0, mode, errcnt, errstr);  // Configure SPI mode for channel 0, using the above settings
+    cp2130_.disableSPIDelays(0, errcnt, errstr);  // Disable all SPI delays for channel 0
+}
+
+// Sets up channel 1 for communication with the AD5310 DAC
+void GF2Device::setupChannel1(int &errcnt, std::string &errstr)
+{
+    CP2130::SPIMode mode;
+    mode.csmode = CP2130::CSMODEPP;  // Chip select pin mode regarding channel 1 is push-pull
+    mode.cfrq = CP2130::CFRQ12M;  // SPI clock frequency set to 12MHz
+    mode.cpol = CP2130::CPOL0;  // SPI clock polarity is active high (CPOL = 0)
+    mode.cpha = CP2130::CPHA1;  // SPI data is valid on each falling edge (CPHA = 1)
+    cp2130_.configureSPIMode(1, mode, errcnt, errstr);  // Configure SPI mode for channel 1, using the above settings
+    cp2130_.disableSPIDelays(1, errcnt, errstr);  // Disable all SPI delays for channel 1
 }
 
 // Helper function that returns the hardware revision from a given USB configuration
