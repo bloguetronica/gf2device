@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.2.0
+/* GF2 device class - Version 0.3.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -20,6 +20,7 @@
 
 
 // Includes
+#include <cmath>
 #include <sstream>
 #include <unistd.h>
 #include <vector>
@@ -27,6 +28,9 @@
 
 // Definitions
 const uint8_t EPOUT = 0x01;  // Address of endpoint assuming the OUT direction
+
+// Amplitude conversion constants
+const uint AQUANTUM = 1023;  // Quantum related to the 10-bit resolution of the AD5310 DAC
 
 GF2Device::GF2Device() :
     cp2130_()
@@ -99,6 +103,25 @@ void GF2Device::reset(int &errcnt, std::string &errstr)
     cp2130_.reset(errcnt, errstr);
 }
 
+// Sets the amplitude of the generated signal to the given value (in Vpp)
+void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
+{
+    if (amplitude < AMPLITUDE_MIN || amplitude > AMPLITUDE_MAX) {
+        ++errcnt;
+        errstr += "In setAmplitude(): Amplitude must be between 0 and 8.\n";  // Program logic error
+    } else {
+        cp2130_.selectCS(1, errcnt, errstr);  // Enable the chip select corresponding to channel 1, and disable any others
+        uint16_t amplitudeCode = static_cast<uint16_t>(amplitude * AQUANTUM / AMPLITUDE_MAX + 0.5);
+        std::vector<uint8_t> setAmplitude = {
+            static_cast<uint8_t>(amplitudeCode >> 6),  // Amplitude
+            static_cast<uint8_t>(amplitudeCode << 2)
+        };
+        cp2130_.spiWrite(setAmplitude, EPOUT, errcnt, errstr);  // Set the amplitude of the output signal (AD5310 on channel 1)
+        usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
+        cp2130_.disableCS(1, errcnt, errstr);  // Disable the previously enabled chip select
+    }
+}
+
 // Sets the waveform of the generated signal to sinusoidal
 void GF2Device::setSineWave(int &errcnt, std::string &errstr)
 {
@@ -145,6 +168,13 @@ void GF2Device::setupChannel1(int &errcnt, std::string &errstr)
     mode.cpha = CP2130::CPHA1;  // SPI data is valid on each falling edge (CPHA = 1)
     cp2130_.configureSPIMode(1, mode, errcnt, errstr);  // Configure SPI mode for channel 1, using the above settings
     cp2130_.disableSPIDelays(1, errcnt, errstr);  // Disable all SPI delays for channel 1
+}
+
+// Helper function that returns the expected amplitude from a given amplitude value
+// Note that the function is only valid for values between "AMPLITUDE_MIN" [0] and "AMPLITUDE_MAX" [8]
+float GF2Device::expectedAmplitude(float amplitude)
+{
+    return std::round(amplitude * AQUANTUM / AMPLITUDE_MAX) * AMPLITUDE_MAX / AQUANTUM;
 }
 
 // Helper function that returns the hardware revision from a given USB configuration
