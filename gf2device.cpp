@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.3.1
+/* GF2 device class - Version 0.4.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -28,9 +28,15 @@
 
 // Definitions
 const uint8_t EPOUT = 0x01;  // Address of endpoint assuming the OUT direction
+const uint8_t FREQ0 = 0x40;  // Mask for the FREQ0 register
+const uint8_t FREQ1 = 0x80;  // Mask for the FREQ1 register
 
 // Amplitude conversion constants
 const uint AQUANTUM = 1023;  // Quantum related to the 10-bit resolution of the AD5310 DAC
+
+// Frequency conversion constants
+const uint FQUANTUM = 268435456;  // Quantum related to the 28-bit frequency resolution of the AD9834 waveform generator
+const float MCLK = 80000;         // 80MHz clock
 
 GF2Device::GF2Device() :
     cp2130_()
@@ -59,6 +65,12 @@ void GF2Device::close()
 CP2130::SiliconVersion GF2Device::getCP2130SiliconVersion(int &errcnt, std::string &errstr)
 {
     return cp2130_.getSiliconVersion(errcnt, errstr);
+}
+
+// Returns the current frequency selection
+bool GF2Device::getFrequencySelection(int &errcnt, std::string &errstr)
+{
+    return cp2130_.getGPIO4(errcnt, errstr);  // GPIO.4 corresponds to the FSEL signal (FSELECT pin on the AD9834 waveform generator)
 }
 
 // Returns the hardware revision of the device
@@ -103,6 +115,12 @@ void GF2Device::reset(int &errcnt, std::string &errstr)
     cp2130_.reset(errcnt, errstr);
 }
 
+// Selects the active frequency
+void GF2Device::selectFrequency(bool select, int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO4(select, errcnt, errstr);  // GPIO.4 corresponds to the FSEL signal (FSELECT pin on the AD9834 waveform generator)
+}
+
 // Sets the amplitude of the generated signal to the given value (in Vpp)
 void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
 {
@@ -119,6 +137,27 @@ void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
         cp2130_.spiWrite(setAmplitude, EPOUT, errcnt, errstr);  // Set the amplitude of the output signal (AD5310 on channel 1)
         usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
         cp2130_.disableCS(1, errcnt, errstr);  // Disable the previously enabled chip select
+    }
+}
+
+// Sets the frequency, selected by the boolean variable "select", to the given value (in KHz)
+void GF2Device::setFrequency(bool select, float frequency, int &errcnt, std::string &errstr)
+{
+    if (frequency < FREQUENCY_MIN || frequency > FREQUENCY_MAX) {
+        ++errcnt;
+        errstr += "In setFrequency(): Frequency must be between 0 and 40000.\n";  // Program logic error
+    } else {
+        cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+        uint32_t frequencyCode = static_cast<uint32_t>(frequency * FQUANTUM / MCLK + 0.5);
+        std::vector<uint8_t> setFrequency = {
+            static_cast<uint8_t>((select ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 8)),   // FREQ0 or FREQ1 register set to the given value, according to the boolean variable "select"
+            static_cast<uint8_t>(frequencyCode),
+            static_cast<uint8_t>((select ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 22)),
+            static_cast<uint8_t>(frequencyCode >> 14)
+        };
+        cp2130_.spiWrite(setFrequency, EPOUT, errcnt, errstr);  // Set the frequency of the output signal by updating the above registers (AD9834 on channel 0)
+        usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
+        cp2130_.disableCS(0, errcnt, errstr);  // Disable the previously enabled chip select
     }
 }
 
@@ -175,6 +214,13 @@ void GF2Device::setupChannel1(int &errcnt, std::string &errstr)
 float GF2Device::expectedAmplitude(float amplitude)
 {
     return std::round(amplitude * AQUANTUM / AMPLITUDE_MAX) * AMPLITUDE_MAX / AQUANTUM;
+}
+
+// Helper function that returns the expected frequency from a given frequency value
+// Note that the function is only valid for values between "FREQUENCY_MIN" [0] and "FREQUENCY_MAX" [40000]
+float GF2Device::expectedFrequency(float frequency)
+{
+    return std::round(frequency * FQUANTUM / MCLK) * MCLK / FQUANTUM;
 }
 
 // Helper function that returns the hardware revision from a given USB configuration

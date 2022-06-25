@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.3.1
+/* GF2 device class - Version 0.4.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -46,6 +46,14 @@ public:
     static constexpr float AMPLITUDE_MIN = 0;  // Minimum amplitude
     static constexpr float AMPLITUDE_MAX = 8;  // Maximum amplitude
 
+    // Frequency selection options applicable to selectFrequency() and setFrequency()
+    static const bool FSEL0 = false;  // Boolean corresponding to frequency 0 selection
+    static const bool FSEL1 = true;   // Boolean corresponding to frequency 1 selection
+
+    // Limits applicable to setFrequency()
+    static constexpr float FREQUENCY_MIN = 0;      // Minimum frequency
+    static constexpr float FREQUENCY_MAX = 40000;  // Maximum frequency
+
     GF2Device();
 
     bool disconnected() const;
@@ -53,6 +61,7 @@ public:
 
     void close();
     CP2130::SiliconVersion getCP2130SiliconVersion(int &errcnt, std::string &errstr);
+    bool getFrequencySelection(int &errcnt, std::string &errstr);
     std::string getHardwareRevision(int &errcnt, std::string &errstr);
     std::u16string getManufacturerDesc(int &errcnt, std::string &errstr);
     std::u16string getProductDesc(int &errcnt, std::string &errstr);
@@ -60,13 +69,16 @@ public:
     CP2130::USBConfig getUSBConfig(int &errcnt, std::string &errstr);
     int open(const std::string &serial = std::string());
     void reset(int &errcnt, std::string &errstr);
+    void selectFrequency(bool select, int &errcnt, std::string &errstr);
     void setAmplitude(float amplitude, int &errcnt, std::string &errstr);
+    void setFrequency(bool select, float frequency, int &errcnt, std::string &errstr);
     void setSineWave(int &errcnt, std::string &errstr);
     void setTriangleWave(int &errcnt, std::string &errstr);
     void setupChannel0(int &errcnt, std::string &errstr);
     void setupChannel1(int &errcnt, std::string &errstr);
 
     static float expectedAmplitude(float amplitude);
+    static float expectedFrequency(float frequency);
     static std::string hardwareRevision(const CP2130::USBConfig &config);
     static std::list<std::string> listDevices(int &errcnt, std::string &errstr);
 };
