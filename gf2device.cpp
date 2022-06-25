@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.3.0
+/* GF2 device class - Version 0.3.1
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -113,7 +113,7 @@ void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
         cp2130_.selectCS(1, errcnt, errstr);  // Enable the chip select corresponding to channel 1, and disable any others
         uint16_t amplitudeCode = static_cast<uint16_t>(amplitude * AQUANTUM / AMPLITUDE_MAX + 0.5);
         std::vector<uint8_t> setAmplitude = {
-            static_cast<uint8_t>(amplitudeCode >> 6),  // Amplitude
+            static_cast<uint8_t>(0x0f & amplitudeCode >> 6),  // Amplitude
             static_cast<uint8_t>(amplitudeCode << 2)
         };
         cp2130_.spiWrite(setAmplitude, EPOUT, errcnt, errstr);  // Set the amplitude of the output signal (AD5310 on channel 1)
