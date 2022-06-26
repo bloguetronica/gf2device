@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.4.0
+/* GF2 device class - Version 0.5.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -30,13 +30,18 @@
 const uint8_t EPOUT = 0x01;  // Address of endpoint assuming the OUT direction
 const uint8_t FREQ0 = 0x40;  // Mask for the FREQ0 register
 const uint8_t FREQ1 = 0x80;  // Mask for the FREQ1 register
+const uint8_t PHASE0 = 0xC0;  // Mask for the PHASE0 register
+const uint8_t PHASE1 = 0xE0;  // Mask for the PHASE1 register
 
-// Amplitude conversion constants
+// Amplitude conversion constant
 const uint AQUANTUM = 1023;  // Quantum related to the 10-bit resolution of the AD5310 DAC
 
 // Frequency conversion constants
 const uint FQUANTUM = 268435456;  // Quantum related to the 28-bit frequency resolution of the AD9834 waveform generator
 const float MCLK = 80000;         // 80MHz clock
+
+// Phase conversion constant
+const uint PQUANTUM = 4096;  // Quantum related to the 12-bit phase resolution of the AD9834 waveform generator
 
 GF2Device::GF2Device() :
     cp2130_()
@@ -85,6 +90,12 @@ std::u16string GF2Device::getManufacturerDesc(int &errcnt, std::string &errstr)
     return cp2130_.getManufacturerDesc(errcnt, errstr);
 }
 
+// Returns the current phase selection
+bool GF2Device::getPhaseSelection(int &errcnt, std::string &errstr)
+{
+    return cp2130_.getGPIO5(errcnt, errstr);  // GPIO.5 corresponds to the PSEL signal (PSELECT pin on the AD9834 waveform generator)
+}
+
 // Gets the product descriptor from the device
 std::u16string GF2Device::getProductDesc(int &errcnt, std::string &errstr)
 {
@@ -121,6 +132,12 @@ void GF2Device::selectFrequency(bool select, int &errcnt, std::string &errstr)
     cp2130_.setGPIO4(select, errcnt, errstr);  // GPIO.4 corresponds to the FSEL signal (FSELECT pin on the AD9834 waveform generator)
 }
 
+// Selects the active phase
+void GF2Device::selectPhase(bool select, int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO5(select, errcnt, errstr);  // GPIO.5 corresponds to the PSEL signal (PSELECT pin on the AD9834 waveform generator)
+}
+
 // Sets the amplitude of the generated signal to the given value (in Vpp)
 void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
 {
@@ -155,10 +172,25 @@ void GF2Device::setFrequency(bool select, float frequency, int &errcnt, std::str
             static_cast<uint8_t>((select ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 22)),
             static_cast<uint8_t>(frequencyCode >> 14)
         };
-        cp2130_.spiWrite(setFrequency, EPOUT, errcnt, errstr);  // Set the frequency of the output signal by updating the above registers (AD9834 on channel 0)
+        cp2130_.spiWrite(setFrequency, EPOUT, errcnt, errstr);  // Set the selected frequency by updating the above registers (AD9834 on channel 0)
         usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
         cp2130_.disableCS(0, errcnt, errstr);  // Disable the previously enabled chip select
     }
+}
+
+// Sets the phase, selected by the boolean variable "select", to the given value (in degrees)
+void GF2Device::setPhase(bool select, float phase, int &errcnt, std::string &errstr)
+{
+    cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    float phaseMod = std::fmod(phase, 360);  // Calculate the remainder of the division between the phase and 360
+    uint16_t phaseCode = static_cast<uint16_t>((phaseMod + (phaseMod < 0 ? 360 : 0)) * PQUANTUM / 360 + 0.5);
+    std::vector<uint8_t> setPhase = {
+        static_cast<uint8_t>((select ? PHASE1 : PHASE0) | (0x0f & phaseCode >> 8)),   // PHASE0 or PHASE1 register set to the given value, according to the boolean variable "select"
+        static_cast<uint8_t>(phaseCode)
+    };
+    cp2130_.spiWrite(setPhase, EPOUT, errcnt, errstr);  // Set the selected phase by updating the above registers (AD9834 on channel 0)
+    usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
+    cp2130_.disableCS(0, errcnt, errstr);  // Disable the previously enabled chip select
 }
 
 // Sets the waveform of the generated signal to sinusoidal
@@ -221,6 +253,13 @@ float GF2Device::expectedAmplitude(float amplitude)
 float GF2Device::expectedFrequency(float frequency)
 {
     return std::round(frequency * FQUANTUM / MCLK) * MCLK / FQUANTUM;
+}
+
+// Helper function that returns the expected phase from a given phase value
+float GF2Device::expectedPhase(float phase)
+{
+    float phaseMod = std::fmod(phase, 360);  // Calculate the remainder of the division between the phase and 360
+    return std::round((phaseMod + (phaseMod < 0 ? 360 : 0)) * PQUANTUM / 360) * 360 / PQUANTUM;
 }
 
 // Helper function that returns the hardware revision from a given USB configuration

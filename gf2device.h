@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.4.0
+/* GF2 device class - Version 0.5.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -54,6 +54,10 @@ public:
     static constexpr float FREQUENCY_MIN = 0;      // Minimum frequency
     static constexpr float FREQUENCY_MAX = 40000;  // Maximum frequency
 
+    // Phase selection options applicable to selectPhase() and setPhase()
+    static const bool PSEL0 = false;  // Boolean corresponding to phase 0 selection
+    static const bool PSEL1 = true;   // Boolean corresponding to phase 1 selection
+
     GF2Device();
 
     bool disconnected() const;
@@ -64,14 +68,17 @@ public:
     bool getFrequencySelection(int &errcnt, std::string &errstr);
     std::string getHardwareRevision(int &errcnt, std::string &errstr);
     std::u16string getManufacturerDesc(int &errcnt, std::string &errstr);
+    bool getPhaseSelection(int &errcnt, std::string &errstr);
     std::u16string getProductDesc(int &errcnt, std::string &errstr);
     std::u16string getSerialDesc(int &errcnt, std::string &errstr);
     CP2130::USBConfig getUSBConfig(int &errcnt, std::string &errstr);
     int open(const std::string &serial = std::string());
     void reset(int &errcnt, std::string &errstr);
     void selectFrequency(bool select, int &errcnt, std::string &errstr);
+    void selectPhase(bool select, int &errcnt, std::string &errstr);
     void setAmplitude(float amplitude, int &errcnt, std::string &errstr);
     void setFrequency(bool select, float frequency, int &errcnt, std::string &errstr);
+    void setPhase(bool select, float phase, int &errcnt, std::string &errstr);
     void setSineWave(int &errcnt, std::string &errstr);
     void setTriangleWave(int &errcnt, std::string &errstr);
     void setupChannel0(int &errcnt, std::string &errstr);
@@ -79,6 +86,7 @@ public:
 
     static float expectedAmplitude(float amplitude);
     static float expectedFrequency(float frequency);
+    static float expectedPhase(float phase);
     static std::string hardwareRevision(const CP2130::USBConfig &config);
     static std::list<std::string> listDevices(int &errcnt, std::string &errstr);
 };
