@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.5.1
+/* GF2 device class - Version 0.6.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -27,9 +27,9 @@
 #include "gf2device.h"
 
 // Definitions
-const uint8_t EPOUT = 0x01;  // Address of endpoint assuming the OUT direction
-const uint8_t FREQ0 = 0x40;  // Mask for the FREQ0 register
-const uint8_t FREQ1 = 0x80;  // Mask for the FREQ1 register
+const uint8_t EPOUT = 0x01;   // Address of endpoint assuming the OUT direction
+const uint8_t FREQ0 = 0x40;   // Mask for the FREQ0 register
+const uint8_t FREQ1 = 0x80;   // Mask for the FREQ1 register
 const uint8_t PHASE0 = 0xc0;  // Mask for the PHASE0 register
 const uint8_t PHASE1 = 0xe0;  // Mask for the PHASE1 register
 
@@ -58,6 +58,39 @@ bool GF2Device::disconnected() const
 bool GF2Device::isOpen() const
 {
     return cp2130_.isOpen();
+}
+
+// Sets the frequency, phase and amplitude of the generated signal to zero, and sets its waveform to sinusoidal
+void GF2Device::clear(int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO2(false, errcnt, errstr);  // If not already, set GPIO.2 to a logical low in preparation for reset (GPIO.2 corresponds to the RST signal and is connected to the RESET pin on the AD9834 waveform generator)
+    cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    std::vector<uint8_t> setupAD9834 = {
+        0x22, 0x00  // B28 = 1, PIN/SW = 1, MODE = 0 (sinusoidal waveform)
+    };
+    cp2130_.spiWrite(setupAD9834, EPOUT, errcnt, errstr);  // Configure the AD9834 (channel 0) so that it acknowledges reset by pin
+    usleep(100);  // Wait 100us, in order to prevent possible errors while setting GPIO.2 high (workaround)
+    cp2130_.setGPIO2(true, errcnt, errstr);  // Set GPIO.2 to a logical high to enable reset
+    std::vector<uint8_t> clearAD9834 = {
+        FREQ0, 0x00, FREQ0, 0x00,  // FREQ0 register set to zero
+        FREQ1, 0x00, FREQ1, 0x00,  // FREQ1 register set to zero
+        PHASE0, 0x00,              // PHASE0 register set to zero
+        PHASE1, 0x00               // PHASE1 register set to zero
+    };
+    cp2130_.spiWrite(clearAD9834, EPOUT, errcnt, errstr);  // Clear all of the AD9834 frequency and phase registers in order to set both generation parameters to zero
+    usleep(100);  // Wait 100us, in order to prevent possible errors while switching the chip select (workaround)
+    cp2130_.selectCS(1, errcnt, errstr);  // Enable the chip select corresponding to channel 1, and disable the one corresponding to channel 0 (the previously selected channel)
+    std::vector<uint8_t> clearAD5310 = {
+        0x00, 0x00  // AD5310 register set to zero
+    };
+    cp2130_.spiWrite(clearAD5310, EPOUT, errcnt, errstr);  // Clear the AD5310 register in order to set the amplitude to zero
+    usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
+    cp2130_.disableCS(1, errcnt, errstr);  // Disable the chip select corresponding to channel 1, which is the only one that is active to this point
+    cp2130_.setGPIO3(false, errcnt, errstr);  // Set GPIO.3 to a logical low to enable the AD9834 internal DAC (GPIO.3 corresponds to the SLP signal and is connected to the SLEEP pin on the AD9834 waveform generator)
+    cp2130_.setGPIO4(false, errcnt, errstr);  // Set GPIO.4 to a logical low, so that the FREQ0 register defines the frequency of the AD9834 (GPIO.4 corresponds to the FSEL signal and is connected to the FSELECT pin on the AD9834 waveform generator)
+    cp2130_.setGPIO5(false, errcnt, errstr);  // Set GPIO.5 to a logical low, so that the PHASE0 register defines the phase of the AD9834 (GPIO.5 corresponds to the PSEL signal and is connected to the PSELECT pin on the AD9834 waveform generator)
+    cp2130_.setGPIO6(false, errcnt, errstr);  // Set GPIO.6 to a logical low to enable the synchronous clock generation  (GPIO.6 corresponds to the !CMPEN signal and is connected to the SHDN pin on the TLV3501 comparator)
+    cp2130_.setGPIO2(false, errcnt, errstr);  // Set GPIO.2 to a logical low to disable reset (the waveform generator is now enabled)
 }
 
 // Closes the device safely, if open
@@ -198,7 +231,7 @@ void GF2Device::setSineWave(int &errcnt, std::string &errstr)
 {
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
     std::vector<uint8_t> setSineWave = {
-        0x22, 0x00  // Sinusoidal waveform, B28 = 1, PIN/SW = 1
+        0x22, 0x00  // B28 = 1, PIN/SW = 1, MODE = 0 (sinusoidal waveform)
     };
     cp2130_.spiWrite(setSineWave, EPOUT, errcnt, errstr);  // Set the waveform to sinusoidal (AD9834 on channel 0)
     usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
@@ -210,7 +243,7 @@ void GF2Device::setTriangleWave(int &errcnt, std::string &errstr)
 {
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
     std::vector<uint8_t> setTriangleWave = {
-        0x22, 0x02  // Triangular waveform, B28 = 1, PIN/SW = 1
+        0x22, 0x02  // B28 = 1, PIN/SW = 1, MODE = 1 (triangular waveform)
     };
     cp2130_.spiWrite(setTriangleWave, EPOUT, errcnt, errstr);  // Set the waveform to triangular (AD9834 on channel 0)
     usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)

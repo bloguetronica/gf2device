@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.5.1
+/* GF2 device class - Version 0.6.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -63,6 +63,7 @@ public:
     bool disconnected() const;
     bool isOpen() const;
 
+    void clear(int &errcnt, std::string &errstr);
     void close();
     CP2130::SiliconVersion getCP2130SiliconVersion(int &errcnt, std::string &errstr);
     bool getFrequencySelection(int &errcnt, std::string &errstr);
