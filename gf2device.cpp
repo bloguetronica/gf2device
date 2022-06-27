@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.5.0
+/* GF2 device class - Version 0.5.1
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -30,8 +30,8 @@
 const uint8_t EPOUT = 0x01;  // Address of endpoint assuming the OUT direction
 const uint8_t FREQ0 = 0x40;  // Mask for the FREQ0 register
 const uint8_t FREQ1 = 0x80;  // Mask for the FREQ1 register
-const uint8_t PHASE0 = 0xC0;  // Mask for the PHASE0 register
-const uint8_t PHASE1 = 0xE0;  // Mask for the PHASE1 register
+const uint8_t PHASE0 = 0xc0;  // Mask for the PHASE0 register
+const uint8_t PHASE1 = 0xe0;  // Mask for the PHASE1 register
 
 // Amplitude conversion constant
 const uint AQUANTUM = 1023;  // Quantum related to the 10-bit resolution of the AD5310 DAC
