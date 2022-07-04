@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.7.0
+/* GF2 device class - Version 0.8.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -63,14 +63,14 @@ bool GF2Device::isOpen() const
 // Sets the frequency, phase and amplitude of the generated signal to zero, and sets its waveform to sinusoidal
 void GF2Device::clear(int &errcnt, std::string &errstr)
 {
-    cp2130_.setGPIO2(false, errcnt, errstr);  // If not already, set GPIO.2 to a logical low in preparation for reset (GPIO.2 corresponds to the RST signal and is connected to the RESET pin on the AD9834 waveform generator)
+    setWaveGenEnabled(true, errcnt, errstr);  // This ensures that the RST signal is low prior to resetting the AD9834 waveform generator, since it requires an high to low transition on its RESET pin for the reset to be sampled and acknowledged
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
     std::vector<uint8_t> setupAD9834 = {
         0x22, 0x00  // B28 = 1, PIN/SW = 1, MODE = 0 (sinusoidal waveform)
     };
     cp2130_.spiWrite(setupAD9834, EPOUT, errcnt, errstr);  // Configure the AD9834 (channel 0) so that it acknowledges reset by pin
-    usleep(100);  // Wait 100us, in order to prevent possible errors while setting GPIO.2 high (workaround)
-    cp2130_.setGPIO2(true, errcnt, errstr);  // Set GPIO.2 to a logical high to enable reset
+    usleep(100);  // Wait 100us, in order to prevent possible errors, since the following operation sets GPIO.2 high (workaround)
+    setWaveGenEnabled(false, errcnt, errstr);  // Disable and reset the AD9834
     std::vector<uint8_t> clearAD9834 = {
         FREQ0, 0x00, FREQ0, 0x00,  // FREQ0 register set to zero
         FREQ1, 0x00, FREQ1, 0x00,  // FREQ1 register set to zero
@@ -86,11 +86,11 @@ void GF2Device::clear(int &errcnt, std::string &errstr)
     cp2130_.spiWrite(clearAD5310, EPOUT, errcnt, errstr);  // Clear the AD5310 register in order to set the amplitude to zero
     usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
     cp2130_.disableCS(1, errcnt, errstr);  // Disable the chip select corresponding to channel 1, which is the only one that is active to this point
-    cp2130_.setGPIO3(false, errcnt, errstr);  // Set GPIO.3 to a logical low to enable the AD9834 internal DAC (GPIO.3 corresponds to the SLP signal and is connected to the SLEEP pin on the AD9834 waveform generator)
-    cp2130_.setGPIO4(false, errcnt, errstr);  // Set GPIO.4 to a logical low, so that the FREQ0 register defines the frequency of the AD9834 (GPIO.4 corresponds to the FSEL signal and is connected to the FSELECT pin on the AD9834 waveform generator)
-    cp2130_.setGPIO5(false, errcnt, errstr);  // Set GPIO.5 to a logical low, so that the PHASE0 register defines the phase of the AD9834 (GPIO.5 corresponds to the PSEL signal and is connected to the PSELECT pin on the AD9834 waveform generator)
-    cp2130_.setGPIO6(false, errcnt, errstr);  // Set GPIO.6 to a logical low to enable the synchronous clock generation  (GPIO.6 corresponds to the !CMPEN signal and is connected to the SHDN pin on the TLV3501 comparator)
-    cp2130_.setGPIO2(false, errcnt, errstr);  // Set GPIO.2 to a logical low to disable reset (the waveform generator is now enabled)
+    setDACEnabled(true, errcnt, errstr);  // Enable the DAC that is internal to the AD9834
+    selectFrequency(FSEL0, errcnt, errstr);  // The FREQ0 register defines the frequency of the AD9834
+    selectPhase(PSEL0, errcnt, errstr);  // The PHASE0 register defines the phase of the AD9834
+    setClockEnabled(true, errcnt, errstr);  // Enable the synchronous clock
+    setWaveGenEnabled(true, errcnt, errstr);  // Re-enable the AD9834
 }
 
 // Closes the device safely, if open
@@ -99,23 +99,10 @@ void GF2Device::close()
     cp2130_.close();
 }
 
-// Gets the status of the synchronous clock (enabled or disabled)
-bool GF2Device::getClockStatus(int &errcnt, std::string &errstr)
-{
-    return !cp2130_.getGPIO6(errcnt, errstr);  // GPIO.6 corresponds to the !CMPEN signal and is connected to the SHDN pin on the TLV3501 comparator
-}
-
-
 // Returns the silicon version of the CP2130 bridge
 CP2130::SiliconVersion GF2Device::getCP2130SiliconVersion(int &errcnt, std::string &errstr)
 {
     return cp2130_.getSiliconVersion(errcnt, errstr);
-}
-
-// Gets the status of the DAC internal to the AD9834 waveform generator (enabled or disabled)
-bool GF2Device::getDACStatus(int &errcnt, std::string &errstr)
-{
-    return !cp2130_.getGPIO3(errcnt, errstr);  // GPIO.3 corresponds to the SLP signal and is connected to the SLEEP pin on the AD9834 waveform generator
 }
 
 // Returns the current frequency selection
@@ -160,6 +147,24 @@ CP2130::USBConfig GF2Device::getUSBConfig(int &errcnt, std::string &errstr)
     return cp2130_.getUSBConfig(errcnt, errstr);
 }
 
+// Checks if the synchronous clock is enabled
+bool GF2Device::isClockEnabled(int &errcnt, std::string &errstr)
+{
+    return !cp2130_.getGPIO6(errcnt, errstr);  // GPIO.6 corresponds to the !CMPEN signal (SHDN pin on the TLV3501 comparator)
+}
+
+// Checks if the DAC internal to the AD9834 waveform generator is enabled
+bool GF2Device::isDACEnabled(int &errcnt, std::string &errstr)
+{
+    return !cp2130_.getGPIO3(errcnt, errstr);  // GPIO.3 corresponds to the SLP signal (SLEEP pin on the AD9834 waveform generator)
+}
+
+// Checks if the AD9834 waveform generator is enabled
+bool GF2Device::isWaveGenEnabled(int &errcnt, std::string &errstr)
+{
+    return !cp2130_.getGPIO2(errcnt, errstr);  // GPIO.2 corresponds to the RST signal (RESET pin on the AD9834 waveform generator)
+}
+
 // Opens a device and assigns its handle
 int GF2Device::open(const std::string &serial)
 {
@@ -197,10 +202,22 @@ void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
             static_cast<uint8_t>(0x0f & amplitudeCode >> 6),  // Amplitude
             static_cast<uint8_t>(amplitudeCode << 2)
         };
-        cp2130_.spiWrite(setAmplitude, EPOUT, errcnt, errstr);  // Set the amplitude of the output signal (AD5310 on channel 1)
+        cp2130_.spiWrite(setAmplitude, EPOUT, errcnt, errstr);  // Set the amplitude of the output signal (AD5310 on channel 1)selectPhase
         usleep(100);  // Wait 100us, in order to prevent possible errors while disabling the chip select (workaround)
         cp2130_.disableCS(1, errcnt, errstr);  // Disable the previously enabled chip select
     }
+}
+
+// Enables or disables the synchronous clock
+void GF2Device::setClockEnabled(bool value, int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO6(!value, errcnt, errstr);  // GPIO.6 corresponds to the !CMPEN signal (SHDN pin on the TLV3501 comparator)
+}
+
+// Enables or disables the DAC internal to the AD9834 waveform generator
+void GF2Device::setDACEnabled(bool value, int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO3(!value, errcnt, errstr);  // GPIO.3 corresponds to the SLP signal (SLEEP pin on the AD9834 waveform generator)
 }
 
 // Sets the frequency, selected by the boolean variable "select", to the given value (in KHz)
@@ -287,16 +304,28 @@ void GF2Device::setupChannel1(int &errcnt, std::string &errstr)
     cp2130_.disableSPIDelays(1, errcnt, errstr);  // Disable all SPI delays for channel 1
 }
 
-// Enables or disables the synchronous clock
-void GF2Device::switchClock(bool value, int &errcnt, std::string &errstr)
+// Enables or disables the AD9834 waveform generator
+void GF2Device::setWaveGenEnabled(bool value, int &errcnt, std::string &errstr)
 {
-    cp2130_.setGPIO6(!value, errcnt, errstr);  // GPIO.6 corresponds to the !CMPEN signal and is connected to the SHDN pin on the TLV3501 comparator
+    cp2130_.setGPIO2(!value, errcnt, errstr);  // GPIO.2 corresponds to the RST signal (RESET pin on the AD9834 waveform generator)
 }
 
-// Enables or disables the DAC internal to the AD9834 waveform generator
-void GF2Device::switchDAC(bool value, int &errcnt, std::string &errstr)
+// Starts (or restarts) the waveform generation
+void GF2Device::start(int &errcnt, std::string &errstr)
 {
-    cp2130_.setGPIO3(!value, errcnt, errstr);  // GPIO.3 corresponds to the SLP signal and is connected to the SLEEP pin on the AD9834 waveform generator
+    setWaveGenEnabled(false, errcnt, errstr);  // Disable and reset the AD9834 waveform generator (required to enforce a restart if the waveform generator is already running)
+    setWaveGenEnabled(true, errcnt, errstr);  // and then re-enable it order to (re)start the waveform generation
+}
+
+// Stops the waveform generation
+void GF2Device::stop(int &errcnt, std::string &errstr)
+{
+    setWaveGenEnabled(false, errcnt, errstr);
+    if (isClockEnabled(errcnt, errstr)) {
+        setClockEnabled(false, errcnt, errstr);  // Disable the TLV3501 comparator
+        usleep(10000);  // Wait 10ms, so that the comparator has time to settle
+        setClockEnabled(true, errcnt, errstr);  // Re-enable the comparator
+    }
 }
 
 // Helper function that returns the expected amplitude from a given amplitude value
