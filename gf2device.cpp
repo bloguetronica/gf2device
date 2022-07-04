@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.6.0
+/* GF2 device class - Version 0.7.0
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -99,10 +99,23 @@ void GF2Device::close()
     cp2130_.close();
 }
 
+// Gets the status of the synchronous clock (enabled or disabled)
+bool GF2Device::getClockStatus(int &errcnt, std::string &errstr)
+{
+    return !cp2130_.getGPIO6(errcnt, errstr);  // GPIO.6 corresponds to the !CMPEN signal and is connected to the SHDN pin on the TLV3501 comparator
+}
+
+
 // Returns the silicon version of the CP2130 bridge
 CP2130::SiliconVersion GF2Device::getCP2130SiliconVersion(int &errcnt, std::string &errstr)
 {
     return cp2130_.getSiliconVersion(errcnt, errstr);
+}
+
+// Gets the status of the DAC internal to the AD9834 waveform generator (enabled or disabled)
+bool GF2Device::getDACStatus(int &errcnt, std::string &errstr)
+{
+    return !cp2130_.getGPIO3(errcnt, errstr);  // GPIO.3 corresponds to the SLP signal and is connected to the SLEEP pin on the AD9834 waveform generator
 }
 
 // Returns the current frequency selection
@@ -272,6 +285,18 @@ void GF2Device::setupChannel1(int &errcnt, std::string &errstr)
     mode.cpha = CP2130::CPHA1;  // SPI data is valid on each falling edge (CPHA = 1)
     cp2130_.configureSPIMode(1, mode, errcnt, errstr);  // Configure SPI mode for channel 1, using the above settings
     cp2130_.disableSPIDelays(1, errcnt, errstr);  // Disable all SPI delays for channel 1
+}
+
+// Enables or disables the synchronous clock
+void GF2Device::switchClock(bool value, int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO6(!value, errcnt, errstr);  // GPIO.6 corresponds to the !CMPEN signal and is connected to the SHDN pin on the TLV3501 comparator
+}
+
+// Enables or disables the DAC internal to the AD9834 waveform generator
+void GF2Device::switchDAC(bool value, int &errcnt, std::string &errstr)
+{
+    cp2130_.setGPIO3(!value, errcnt, errstr);  // GPIO.3 corresponds to the SLP signal and is connected to the SLEEP pin on the AD9834 waveform generator
 }
 
 // Helper function that returns the expected amplitude from a given amplitude value
