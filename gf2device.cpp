@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.8.0
+/* GF2 device class - Version 0.8.1
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -178,15 +178,15 @@ void GF2Device::reset(int &errcnt, std::string &errstr)
 }
 
 // Selects the active frequency
-void GF2Device::selectFrequency(bool select, int &errcnt, std::string &errstr)
+void GF2Device::selectFrequency(bool fsel, int &errcnt, std::string &errstr)
 {
-    cp2130_.setGPIO4(select, errcnt, errstr);  // GPIO.4 corresponds to the FSEL signal (FSELECT pin on the AD9834 waveform generator)
+    cp2130_.setGPIO4(fsel, errcnt, errstr);  // GPIO.4 corresponds to the FSEL signal (FSELECT pin on the AD9834 waveform generator)
 }
 
 // Selects the active phase
-void GF2Device::selectPhase(bool select, int &errcnt, std::string &errstr)
+void GF2Device::selectPhase(bool psel, int &errcnt, std::string &errstr)
 {
-    cp2130_.setGPIO5(select, errcnt, errstr);  // GPIO.5 corresponds to the PSEL signal (PSELECT pin on the AD9834 waveform generator)
+    cp2130_.setGPIO5(psel, errcnt, errstr);  // GPIO.5 corresponds to the PSEL signal (PSELECT pin on the AD9834 waveform generator)
 }
 
 // Sets the amplitude of the generated signal to the given value (in Vpp)
@@ -220,8 +220,8 @@ void GF2Device::setDACEnabled(bool value, int &errcnt, std::string &errstr)
     cp2130_.setGPIO3(!value, errcnt, errstr);  // GPIO.3 corresponds to the SLP signal (SLEEP pin on the AD9834 waveform generator)
 }
 
-// Sets the frequency, selected by the boolean variable "select", to the given value (in KHz)
-void GF2Device::setFrequency(bool select, float frequency, int &errcnt, std::string &errstr)
+// Sets the frequency, selected by the boolean variable "fsel", to the given value (in KHz)
+void GF2Device::setFrequency(bool fsel, float frequency, int &errcnt, std::string &errstr)
 {
     if (frequency < FREQUENCY_MIN || frequency > FREQUENCY_MAX) {
         ++errcnt;
@@ -230,9 +230,9 @@ void GF2Device::setFrequency(bool select, float frequency, int &errcnt, std::str
         cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
         uint32_t frequencyCode = static_cast<uint32_t>(frequency * FQUANTUM / MCLK + 0.5);
         std::vector<uint8_t> setFrequency = {
-            static_cast<uint8_t>((select ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 8)),   // FREQ0 or FREQ1 register set to the given value, according to the boolean variable "select"
+            static_cast<uint8_t>((fsel ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 8)),   // FREQ0 or FREQ1 register set to the given value, according to the boolean variable "fsel"
             static_cast<uint8_t>(frequencyCode),
-            static_cast<uint8_t>((select ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 22)),
+            static_cast<uint8_t>((fsel ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 22)),
             static_cast<uint8_t>(frequencyCode >> 14)
         };
         cp2130_.spiWrite(setFrequency, EPOUT, errcnt, errstr);  // Set the selected frequency by updating the above registers (AD9834 on channel 0)
@@ -241,14 +241,14 @@ void GF2Device::setFrequency(bool select, float frequency, int &errcnt, std::str
     }
 }
 
-// Sets the phase, selected by the boolean variable "select", to the given value (in degrees)
-void GF2Device::setPhase(bool select, float phase, int &errcnt, std::string &errstr)
+// Sets the phase, selected by the boolean variable "psel", to the given value (in degrees)
+void GF2Device::setPhase(bool psel, float phase, int &errcnt, std::string &errstr)
 {
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
     float phaseMod = std::fmod(phase, 360);  // Calculate the remainder of the division between the phase and 360
     uint16_t phaseCode = static_cast<uint16_t>((phaseMod + (phaseMod < 0 ? 360 : 0)) * PQUANTUM / 360 + 0.5);
     std::vector<uint8_t> setPhase = {
-        static_cast<uint8_t>((select ? PHASE1 : PHASE0) | (0x0f & phaseCode >> 8)),   // PHASE0 or PHASE1 register set to the given value, according to the boolean variable "select"
+        static_cast<uint8_t>((psel ? PHASE1 : PHASE0) | (0x0f & phaseCode >> 8)),   // PHASE0 or PHASE1 register set to the given value, according to the boolean variable "psel"
         static_cast<uint8_t>(phaseCode)
     };
     cp2130_.spiWrite(setPhase, EPOUT, errcnt, errstr);  // Set the selected phase by updating the above registers (AD9834 on channel 0)

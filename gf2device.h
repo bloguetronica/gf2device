@@ -1,4 +1,4 @@
-/* GF2 device class - Version 0.8.0
+/* GF2 device class - Version 0.8.1
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -78,13 +78,13 @@ public:
     bool isWaveGenEnabled(int &errcnt, std::string &errstr);
     int open(const std::string &serial = std::string());
     void reset(int &errcnt, std::string &errstr);
-    void selectFrequency(bool select, int &errcnt, std::string &errstr);
-    void selectPhase(bool select, int &errcnt, std::string &errstr);
+    void selectFrequency(bool fsel, int &errcnt, std::string &errstr);
+    void selectPhase(bool psel, int &errcnt, std::string &errstr);
     void setAmplitude(float amplitude, int &errcnt, std::string &errstr);
     void setClockEnabled(bool value, int &errcnt, std::string &errstr);
     void setDACEnabled(bool value, int &errcnt, std::string &errstr);
-    void setFrequency(bool select, float frequency, int &errcnt, std::string &errstr);
-    void setPhase(bool select, float phase, int &errcnt, std::string &errstr);
+    void setFrequency(bool fsel, float frequency, int &errcnt, std::string &errstr);
+    void setPhase(bool psel, float phase, int &errcnt, std::string &errstr);
     void setSineWave(int &errcnt, std::string &errstr);
     void setTriangleWave(int &errcnt, std::string &errstr);
     void setupChannel0(int &errcnt, std::string &errstr);
