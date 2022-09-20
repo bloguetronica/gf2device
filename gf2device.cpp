@@ -1,4 +1,4 @@
-/* GF2 device class - Version 1.0.0
+/* GF2 device class - Version 1.0.1
    Requires CP2130 class version 1.1.0 or later
    Copyright (c) 2022 Samuel Lourenço
 
@@ -65,6 +65,7 @@ void GF2Device::clear(int &errcnt, std::string &errstr)
 {
     setWaveGenEnabled(true, errcnt, errstr);  // This ensures that the RST signal is low prior to resetting the AD9834 waveform generator, since it requires an high to low transition on its RESET pin for the reset to be sampled and acknowledged
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    usleep(100);  // Wait 100us, in order to prevent possible errors after enabling the chip select (workaround implemented in version 1.0.1)
     std::vector<uint8_t> setupAD9834 = {
         0x22, 0x00  // B28 = 1, PIN/SW = 1, MODE = 0 (sinusoidal waveform)
     };
@@ -80,6 +81,7 @@ void GF2Device::clear(int &errcnt, std::string &errstr)
     cp2130_.spiWrite(clearAD9834, EPOUT, errcnt, errstr);  // Clear all of the AD9834 frequency and phase registers in order to set both generation parameters to zero
     usleep(100);  // Wait 100us, in order to prevent possible errors while switching the chip select (workaround)
     cp2130_.selectCS(1, errcnt, errstr);  // Enable the chip select corresponding to channel 1, and disable the one corresponding to channel 0 (the previously selected channel)
+    usleep(100);  // Wait 100us, in order to prevent possible errors after switching the chip select (workaround implemented in version 1.0.1)
     std::vector<uint8_t> clearAD5310 = {
         0x00, 0x00  // AD5310 register set to zero
     };
@@ -197,6 +199,7 @@ void GF2Device::setAmplitude(float amplitude, int &errcnt, std::string &errstr)
         errstr += "In setAmplitude(): Amplitude must be between 0 and 8.\n";  // Program logic error
     } else {
         cp2130_.selectCS(1, errcnt, errstr);  // Enable the chip select corresponding to channel 1, and disable any others
+        usleep(100);  // Wait 100us, in order to prevent possible errors after enabling the chip select (workaround implemented in version 1.0.1)
         uint16_t amplitudeCode = static_cast<uint16_t>(amplitude * AQUANTUM / AMPLITUDE_MAX + 0.5);
         std::vector<uint8_t> setAmplitude = {
             static_cast<uint8_t>(0x0f & amplitudeCode >> 6),  // Amplitude
@@ -228,6 +231,7 @@ void GF2Device::setFrequency(bool fsel, float frequency, int &errcnt, std::strin
         errstr += "In setFrequency(): Frequency must be between 0 and 40000.\n";  // Program logic error
     } else {
         cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+        usleep(100);  // Wait 100us, in order to prevent possible errors after enabling the chip select (workaround implemented in version 1.0.1)
         uint32_t frequencyCode = static_cast<uint32_t>(frequency * FQUANTUM / MCLK + 0.5);
         std::vector<uint8_t> setFrequency = {
             static_cast<uint8_t>((fsel ? FREQ1 : FREQ0) | (0x3f & frequencyCode >> 8)),   // FREQ0 or FREQ1 register set to the given value, according to the boolean variable "fsel"
@@ -245,6 +249,7 @@ void GF2Device::setFrequency(bool fsel, float frequency, int &errcnt, std::strin
 void GF2Device::setPhase(bool psel, float phase, int &errcnt, std::string &errstr)
 {
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    usleep(100);  // Wait 100us, in order to prevent possible errors after enabling the chip select (workaround implemented in version 1.0.1)
     float phaseMod = std::fmod(phase, 360);  // Calculate the remainder of the division between the phase and 360
     uint16_t phaseCode = static_cast<uint16_t>((phaseMod + (phaseMod < 0 ? 360 : 0)) * PQUANTUM / 360 + 0.5);
     std::vector<uint8_t> setPhase = {
@@ -260,6 +265,7 @@ void GF2Device::setPhase(bool psel, float phase, int &errcnt, std::string &errst
 void GF2Device::setSineWave(int &errcnt, std::string &errstr)
 {
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    usleep(100);  // Wait 100us, in order to prevent possible errors after enabling the chip select (workaround implemented in version 1.0.1)
     std::vector<uint8_t> setSineWave = {
         0x22, 0x00  // B28 = 1, PIN/SW = 1, MODE = 0 (sinusoidal waveform)
     };
@@ -272,6 +278,7 @@ void GF2Device::setSineWave(int &errcnt, std::string &errstr)
 void GF2Device::setTriangleWave(int &errcnt, std::string &errstr)
 {
     cp2130_.selectCS(0, errcnt, errstr);  // Enable the chip select corresponding to channel 0, and disable any others
+    usleep(100);  // Wait 100us, in order to prevent possible errors after enabling the chip select (workaround implemented in version 1.0.1)
     std::vector<uint8_t> setTriangleWave = {
         0x22, 0x02  // B28 = 1, PIN/SW = 1, MODE = 1 (triangular waveform)
     };
