@@ -1,6 +1,6 @@
-/* GF2 device class - Version 1.0.1
+/* GF2 device class - Version 1.0.2
    Requires CP2130 class version 1.1.0 or later
-   Copyright (c) 2022 Samuel Lourenço
+   Copyright (c) 2022-2026 Samuel Lourenço
 
    This library is free software: you can redistribute it and/or modify it
    under the terms of the GNU Lesser General Public License as published by
